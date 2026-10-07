@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Happy Shop - Servicios Premium</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- PapaParse para leer CSV de Google -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { 
+                        dark: '#0a0a0a', 
+                        darker: '#050505',
+                        neonPurple: '#a855f7',
+                        neonCyan: '#06b6d4',
+                        neonGreen: '#10b981'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #050505; color: #f3f4f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .neon-card { background: #111; border: 1px solid #222; transition: all 0.3s ease; }
+        .neon-card:hover { border-color: #a855f7; box-shadow: 0 0 15px rgba(168, 85, 247, 0.4), inset 0 0 10px rgba(168, 85, 247, 0.1); transform: translateY(-5px); }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0a0a0a; }
+        ::-webkit-scrollbar-thumb { background: #a855f7; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #06b6d4; }
+        .category-btn.active { background: linear-gradient(90deg, #a855f7, #06b6d4); color: white; border-color: transparent; box-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
+    </style>
+</head>
+<body class="bg-darker text-gray-200">
+
+    <nav class="bg-dark text-white p-4 sticky top-0 z-40 border-b border-gray-800 shadow-lg">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="text-2xl font-bold flex items-center gap-2 bg-clip-text text-transparent bg-gradient-to-r from-neonPurple to-neonCyan">
+                <i class="fa-solid fa-bolt text-neonCyan"></i> JPM Shop
+            </div>
+            <button onclick="toggleCart()" class="relative p-2 bg-gray-900 border border-gray-700 rounded-lg hover:border-neonCyan transition">
+                <i class="fa-solid fa-cart-shopping text-neonCyan"></i>
+                <span id="cart-count" class="absolute -top-2 -right-2 bg-neonPurple text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold shadow-[0_0_8px_rgba(168,85,247,0.8)]">0</span>
+            </button>
+        </div>
+    </nav>
+
+    <header class="relative bg-darker text-white py-20 text-center px-4 overflow-hidden border-b border-gray-900">
+        <div class="absolute top-0 left-1/4 w-64 h-64 bg-neonPurple rounded-full mix-blend-screen filter blur-[100px] opacity-20"></div>
+        <div class="absolute bottom-0 right-1/4 w-64 h-64 bg-neonCyan rounded-full mix-blend-screen filter blur-[100px] opacity-20"></div>
+        <h1 class="relative text-4xl md:text-6xl font-black mb-4 uppercase tracking-wider">
+            Streaming <span class="text-transparent bg-clip-text bg-gradient-to-r from-neonPurple to-neonCyan">Premium</span>
+        </h1>
+        <p class="relative text-lg md:text-xl text-gray-400 max-w-2xl mx-auto">La mejor calidad al mejor precio. Selecciona tu servicio, agrégalo al carrito y activa en minutos.</p>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 my-8">
+        <div class="mb-8">
+            <h2 class="text-xl font-bold mb-4 text-neonCyan flex items-center gap-2"><i class="fa-solid fa-filter"></i> Categorías</h2>
+            <div id="category-filters" class="flex gap-3 overflow-x-auto pb-4 scroll-smooth whitespace-nowrap"></div>
+        </div>
+
+        <div id="loading" class="text-center py-10 text-neonPurple font-bold text-xl">
+            <i class="fa-solid fa-circle-notch fa-spin"></i> Cargando inventario...
+        </div>
+
+        <div id="products-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 hidden"></div>
+    </main>
+
+    <div id="cart-sidebar" class="fixed top-0 right-0 h-full w-full md:w-96 bg-dark shadow-[-5px_0_20px_rgba(0,0,0,0.8)] transform translate-x-full transition-transform duration-300 z-50 flex flex-col border-l border-gray-800">
+        <div class="p-5 border-b border-gray-800 flex justify-between items-center">
+            <h2 class="text-xl font-bold text-neonCyan"><i class="fa-solid fa-cart-shopping mr-2"></i> Arsenal de Compra</h2>
+            <button onclick="toggleCart()" class="text-gray-400 hover:text-white transition"><i class="fa-solid fa-xmark text-2xl"></i></button>
+        </div>
+        <div id="cart-items" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+        <div class="p-5 border-t border-gray-800 bg-black">
+            <div class="flex gap-2 mb-4">
+                <input type="text" id="coupon-input" placeholder="Código PROMO" class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-neonPurple text-white">
+                <button onclick="applyCoupon()" class="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm border border-gray-700 hover:border-neonPurple transition">Aplicar</button>
+            </div>
+            <div id="coupon-message" class="text-xs text-neonGreen mb-2 font-semibold hidden"></div>
+            <div class="flex justify-between mb-2 text-gray-400"><span>Subtotal:</span> <span id="cart-subtotal">S/ 0.00</span></div>
+            <div class="flex justify-between mb-2 text-neonGreen font-semibold"><span>Descuento:</span> <span id="cart-discount">-S/ 0.00</span></div>
+            <div class="flex justify-between text-2xl font-bold mb-6 text-white"><span>Total:</span> <span id="cart-total">S/ 0.00</span></div>
+            <button onclick="checkout()" class="w-full bg-gradient-to-r from-neonGreen to-green-600 hover:from-green-500 hover:to-green-400 text-white font-bold py-4 rounded-xl flex justify-center items-center gap-2 transition shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_20px_rgba(16,185,129,0.6)] uppercase tracking-wide">
+                <i class="fa-brands fa-whatsapp text-2xl"></i> Procesar Pedido
+            </button>
+        </div>
+    </div>
+    <div id="cart-overlay" onclick="toggleCart()" class="fixed inset-0 bg-black bg-opacity-70 z-40 hidden backdrop-blur-sm"></div>
+
+    <script>
+        // Enlace oficial de tu archivo publicado en formato CSV
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRNWNSOV2L7Tm2OGNKX7P2RudCIRpkrbYmL560jhDawi7xYEOoNJryHCEiPz-TLthrr__TGmFzOzBlU/pub?output=csv';
+        
+        let sheetData = [];
+        let cart = [];
+        let currentDiscountPercent = 0;
+        let currentCategory = 'Todas';
+
+        function loadData() {
+            Papa.parse(csvUrl, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    sheetData = results.data.filter(row => row.ID && row.Producto);
+                    
+                    if (sheetData.length === 0) {
+                        document.getElementById('loading').innerHTML = '⚠️ No hay productos. Verifica tu Google Sheet.';
+                        return;
+                    }
+
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('products-grid').classList.remove('hidden');
+                    
+                    renderCategoryFilters();
+                    renderProducts();
+                },
+                error: function() {
+                    document.getElementById('loading').innerHTML = '❌ Error al cargar datos. Verifica el enlace de Google Sheets.';
+                    document.getElementById('loading').classList.replace('text-neonPurple', 'text-red-500');
+                }
+            });
+        }
+
+        function renderCategoryFilters() {
+            const container = document.getElementById('category-filters');
+            container.innerHTML = '';
+            
+            const categories = ['Todas', ...new Set(sheetData.map(item => item['Categoría']))];
+            
+            categories.forEach(cat => {
+                if(!cat) return; 
+                const btn = document.createElement('button');
+                btn.className = `category-btn px-5 py-2 rounded-full border border-gray-700 text-gray-300 font-semibold transition ${cat === currentCategory ? 'active' : 'hover:border-neonCyan'}`;
+                btn.textContent = cat;
+                btn.onclick = () => {
+                    currentCategory = cat;
+                    renderCategoryFilters(); 
+                    renderProducts(); 
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function renderProducts() {
+            const grid = document.getElementById('products-grid');
+            grid.innerHTML = '';
+
+            const filteredData = currentCategory === 'Todas' 
+                ? sheetData 
+                : sheetData.filter(prod => prod['Categoría'] === currentCategory);
+
+            filteredData.forEach(prod => {
+                const stock = parseInt(prod.Stock) || 0;
+                const precio = parseFloat(prod['Precio (S/)']) || 0;
+                const isOutOfStock = stock <= 0 || prod.Estado === 'Agotado';
+                
+                const card = document.createElement('div');
+                card.className = "neon-card rounded-xl overflow-hidden flex flex-col relative group";
+                
+                card.innerHTML = `
+                    <div class="relative h-48 overflow-hidden bg-gray-900">
+                        <img src="${prod['Imagen URL']}" alt="${prod.Producto}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 ${isOutOfStock ? 'grayscale opacity-40' : ''}" onerror="this.src='https://via.placeholder.com/500x300/111/fff?text=JPM+Shop'">
+                        
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+                        
+                        ${isOutOfStock 
+                            ? `<span class="absolute top-3 right-3 bg-red-600/90 text-white text-xs font-bold px-3 py-1 rounded shadow-[0_0_10px_rgba(220,38,38,0.8)] border border-red-400 uppercase tracking-widest">Agotado</span>` 
+                            : `<span class="absolute top-3 right-3 bg-neonCyan/20 text-neonCyan border border-neonCyan/50 text-xs font-bold px-3 py-1 rounded backdrop-blur-sm shadow-[0_0_10px_rgba(6,182,212,0.3)]">${prod['Categoría'] || 'Varios'}</span>`
+                        }
+                    </div>
+                    <div class="p-5 flex-1 flex flex-col">
+                        <h3 class="font-bold text-xl mb-1 text-white">${prod.Producto}</h3>
+                        <p class="text-sm text-gray-400 mb-4 line-clamp-2">${prod['Descripción'] || 'Servicio premium con entrega inmediata.'}</p>
+                        
+                        <div class="mt-auto flex items-end justify-between">
+                            <p class="text-2xl font-black text-neonPurple">S/ ${precio.toFixed(2)}</p>
+                            
+                            <button 
+                                id="btn-${prod.ID}"
+                                onclick="addToCart('${prod.ID}', this)" 
+                                class="w-12 h-12 rounded-lg flex items-center justify-center transition-all duration-300 ${isOutOfStock ? 'bg-gray-800 text-gray-600 cursor-not-allowed border border-gray-700' : 'bg-gray-800 text-neonCyan hover:bg-neonCyan hover:text-white border border-neonCyan/30 hover:border-neonCyan shadow-[0_0_10px_rgba(6,182,212,0.1)] hover:shadow-[0_0_15px_rgba(6,182,212,0.5)]'}"
+                                ${isOutOfStock ? 'disabled' : ''}
+                                title="Agregar al carrito">
+                                ${isOutOfStock ? '<i class="fa-solid fa-ban"></i>' : '<i class="fa-solid fa-plus text-xl"></i>'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function addToCart(id, buttonElement) {
+            const product = sheetData.find(p => String(p.ID) === String(id));
+            const stock = parseInt(product.Stock);
+            
+            if (!product || stock <= 0) return;
+
+            buttonElement.innerHTML = '<i class="fa-solid fa-check text-xl"></i>';
+            buttonElement.classList.replace('bg-gray-800', 'bg-neonGreen');
+            buttonElement.classList.replace('text-neonCyan', 'text-white');
+            buttonElement.classList.replace('hover:bg-neonCyan', 'hover:bg-neonGreen');
+            buttonElement.classList.replace('border-neonCyan/30', 'border-neonGreen');
+            buttonElement.style.boxShadow = '0 0 15px rgba(16, 185, 129, 0.6)';
+
+            setTimeout(() => {
+                buttonElement.innerHTML = '<i class="fa-solid fa-plus text-xl"></i>';
+                buttonElement.classList.replace('bg-neonGreen', 'bg-gray-800');
+                buttonElement.classList.replace('text-white', 'text-neonCyan');
+                buttonElement.classList.replace('hover:bg-neonGreen', 'hover:bg-neonCyan');
+                buttonElement.classList.replace('border-neonGreen', 'border-neonCyan/30');
+                buttonElement.style.boxShadow = '';
+            }, 800);
+
+            const existing = cart.find(item => String(item.ID) === String(id));
+            if (existing) {
+                if(existing.qty < stock) {
+                    existing.qty++;
+                } else {
+                    alert('Límite de stock alcanzado.');
+                }
+            } else {
+                cart.push({ ...product, qty: 1 });
+            }
+            updateCartUI();
+        }
+
+        function toggleCart() {
+            document.getElementById('cart-sidebar').classList.toggle('translate-x-full');
+            document.getElementById('cart-overlay').classList.toggle('hidden');
+        }
+
+        function removeFromCart(id) {
+            cart = cart.filter(item => String(item.ID) !== String(id));
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            const container = document.getElementById('cart-items');
+            const count = document.getElementById('cart-count');
+            let subtotal = 0;
+            
+            container.innerHTML = '';
+            
+            cart.forEach(item => {
+                const precio = parseFloat(item['Precio (S/)']);
+                subtotal += precio * item.qty;
+                container.innerHTML += `
+                    <div class="flex items-center gap-3 bg-gray-900 p-3 rounded-lg border border-gray-800">
+                        <img src="${item['Imagen URL']}" class="w-16 h-16 object-cover rounded border border-gray-700" onerror="this.src='https://via.placeholder.com/150/111/fff?text=No+Img'">
+                        <div class="flex-1">
+                            <h4 class="text-sm font-bold text-white line-clamp-1">${item.Producto}</h4>
+                            <p class="text-xs text-neonPurple font-bold mt-1">${item.qty} x S/ ${precio.toFixed(2)}</p>
+                        </div>
+                        <button onclick="removeFromCart('${item.ID}')" class="text-gray-500 hover:text-red-500 transition p-2 bg-gray-950 rounded-lg">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+            });
+
+            const discountValue = subtotal * currentDiscountPercent;
+            const total = subtotal - discountValue;
+
+            count.textContent = cart.reduce((sum, item) => sum + item.qty, 0);
+            document.getElementById('cart-subtotal').textContent = `S/ ${subtotal.toFixed(2)}`;
+            document.getElementById('cart-discount').textContent = `-S/ ${discountValue.toFixed(2)}`;
+            document.getElementById('cart-total').textContent = `S/ ${total.toFixed(2)}`;
+        }
+
+        function applyCoupon() {
+            const input = document.getElementById('coupon-input').value.toUpperCase();
+            const msg = document.getElementById('coupon-message');
+            
+            if (input === 'STREAMING10') {
+                currentDiscountPercent = 0.10;
+                msg.textContent = "¡PROMO APLICADA: 10% OFF!";
+                msg.classList.remove('hidden', 'text-red-500');
+                msg.classList.add('text-neonGreen');
+            } else {
+                currentDiscountPercent = 0;
+                msg.textContent = "CÓDIGO INVÁLIDO";
+                msg.classList.remove('hidden', 'text-neonGreen');
+                msg.classList.add('text-red-500');
+            }
+            updateCartUI();
+        }
+
+        function checkout() {
+            if (cart.length === 0) return alert('Tu carrito está vacío');
+            
+            let msg = "Hola Happycanchita, quiero procesar este pedido:%0A%0A";
+            cart.forEach(item => {
+                const p = parseFloat(item['Precio (S/)']);
+                msg += `🎮 ${item.qty}x ${item.Producto} (S/ ${p.toFixed(2)})%0A`;
+            });
+            
+            const total = document.getElementById('cart-total').textContent;
+            msg += `%0A💰 *Total a pagar:* ${total}`;
+            if(currentDiscountPercent > 0) msg += " (Promo aplicada)";
+            
+            window.open(`https://wa.me/519175661084?text=${msg}`, '_blank');
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
